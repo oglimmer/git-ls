@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""
+List directories with git repository status information.
+Similar to ls -l but shows git repo status.
+"""
+
+import os
+import sys
+import subprocess
+from pathlib import Path
+from datetime import datetime
+
+def get_git_status(path):
+    """
+    Get git status for a directory.
+    Returns a tuple: (is_repo, status_string, status_color)
+    """
+    git_dir = path / '.git'
+
+    if not git_dir.exists():
+        return False, "no-repo", ""
+
+    try:
+        # Check if there are any changes
+        result = subprocess.run(
+            ['git', '-C', str(path), 'status', '--porcelain'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if result.returncode != 0:
+            return True, "error", ""
+
+        status_lines = result.stdout.strip().split('\n') if result.stdout.strip() else []
+
+        if not status_lines:
+            return True, "clean", "\033[32m"  # Green
+
+        # Analyze the status
+        staged = []
+        unstaged = []
+        untracked = []
+
+        for line in status_lines:
+            if len(line) < 2:
+                continue
+
+            index_status = line[0]
+            work_tree_status = line[1]
+
+            if index_status != ' ' and index_status != '?':
+                staged.append(line)
+
+            if work_tree_status != ' ':
+                if line.startswith('??'):
+                    untracked.append(line)
+                else:
+                    unstaged.append(line)
+
+        # Build status string
+        status_parts = []
+        if staged:
+            status_parts.append(f"{len(staged)}↑")  # staged changes
+        if unstaged:
+            status_parts.append(f"{len(unstaged)}✗")  # unstaged changes
+        if untracked:
+            status_parts.append(f"{len(untracked)}?")  # untracked files
+
+        status_str = " ".join(status_parts)
+        return True, status_str, "\033[33m"  # Yellow for changes
+
+    except subprocess.TimeoutExpired:
+        return True, "timeout", ""
+    except Exception as e:
+        return True, f"error", ""
+
+def get_dir_info(path):
+    """Get directory information similar to ls -l"""
+    stat_info = path.stat()
+
+    # Get modification time
+    mtime = datetime.fromtimestamp(stat_info.st_mtime)
+    mtime_str = mtime.strftime("%b %d %H:%M")
+
+    # Get permissions
+    mode = stat_info.st_mode
+    perms = []
+    perms.append('d')  # directory
+    # Owner permissions
+    perms.append('r' if mode & 0o400 else '-')
+    perms.append('w' if mode & 0o200 else '-')
+    perms.append('x' if mode & 0o100 else '-')
+    # Group permissions
+    perms.append('r' if mode & 0o040 else '-')
+    perms.append('w' if mode & 0o020 else '-')
+    perms.append('x' if mode & 0o010 else '-')
+    # Other permissions
+    perms.append('r' if mode & 0o004 else '-')
+    perms.append('w' if mode & 0o002 else '-')
+    perms.append('x' if mode & 0o001 else '-')
+
+    perm_str = ''.join(perms)
+
+    return perm_str, mtime_str
+
+def main():
+    # Get target directory from argument or use current directory
+    target_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
+
+    if not target_dir.is_dir():
+        print(f"Error: {target_dir} is not a directory", file=sys.stderr)
+        sys.exit(1)
+
+    # Get all subdirectories
+    try:
+        entries = sorted([d for d in target_dir.iterdir() if d.is_dir() and not d.name.startswith('.')],
+                        key=lambda x: x.name.lower())
+    except PermissionError:
+        print(f"Error: Permission denied accessing {target_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    if not entries:
+        print(f"No subdirectories found in {target_dir}")
+        return
+
+    # Process each directory
+    results = []
+    for entry in entries:
+        perms, mtime = get_dir_info(entry)
+        is_repo, git_status, color = get_git_status(entry)
+
+        results.append({
+            'name': entry.name,
+            'perms': perms,
+            'mtime': mtime,
+            'is_repo': is_repo,
+            'git_status': git_status,
+            'color': color
+        })
+
+    # Calculate column widths
+    max_name_len = max(len(r['name']) for r in results)
+
+    # Print header
+    print(f"{'PERMISSIONS':<12} {'MODIFIED':<12} {'GIT STATUS':<15} NAME")
+    print("-" * (12 + 12 + 15 + max_name_len + 3))
+
+    # Print results
+    reset_color = "\033[0m"
+    for r in results:
+        git_status_display = r['git_status'] if r['is_repo'] else "-"
+
+        # Apply color to the entire line if there's a git status
+        if r['color']:
+            print(f"{r['color']}{r['perms']:<12} {r['mtime']:<12} {git_status_display:<15} {r['name']}{reset_color}")
+        else:
+            print(f"{r['perms']:<12} {r['mtime']:<12} {git_status_display:<15} {r['name']}")
+
+if __name__ == '__main__':
+    main()
