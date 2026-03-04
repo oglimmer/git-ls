@@ -23,9 +23,17 @@ A command-line tool that lists directories with git repository status informatio
 
 ## Installation
 
+### Homebrew (recommended)
+
+```bash
+brew install oglimmer/tap/git-ls
+```
+
+### Manual
+
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/oglimmer/git-ls.git
 cd git-ls
 ```
 
@@ -34,7 +42,7 @@ cd git-ls
 chmod +x git-ls
 ```
 
-3. (Optional) Add to your PATH:
+3. Add to your PATH:
 ```bash
 # Add to ~/.bashrc or ~/.zshrc
 export PATH="$PATH:/path/to/git-ls"
