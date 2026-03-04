@@ -26,7 +26,8 @@ A command-line tool that lists directories with git repository status informatio
 ### Homebrew (recommended)
 
 ```bash
-brew install oglimmer/tap/git-ls
+brew tap oglimmer/git-ls https://github.com/oglimmer/git-ls
+brew install git-ls
 ```
 
 ### Manual
